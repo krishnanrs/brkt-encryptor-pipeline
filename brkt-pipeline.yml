@@ -1,0 +1,59 @@
+groups: []
+
+resource_types:
+- name: pivnet
+  type: docker-image
+  source:
+    repository: pivotalcf/pivnet-resource
+    tag: latest-final
+
+resources:
+- name: base-stemcell
+  type: pivnet
+  source:
+    api_token: {{pivnet_token}}
+    product_slug: stemcells
+    sort_by: semver
+
+- name: brkt-stemcell
+  type: s3
+  source:
+    access_key_id: {{aws_access_key_id}}
+    secret_access_key: {{aws_secret_access_key}}
+    region_name: {{aws_bucket_region}}
+    bucket: {{brkt_stemcell_bucket}}
+    regexp: light-bosh-stemcell-(.*)-aws-xen-hvm-ubuntu-trusty-go_agent.tgz
+
+- name: pcf-pipelines
+  type: git
+  source:
+    uri: git@github.com:krishnanrs/brkt-encryptor-pipeline.git
+    branch: master
+    private_key: {{git_private_key}}
+
+jobs:
+- name: create-brkt-stemcell
+  plan:
+  - aggregate:
+    - get: base-stemcell
+      params:
+        globs:
+        - light-bosh-stemcell-*-aws-xen-hvm-ubuntu-trusty-go_agent.tgz
+    - get: pcf-pipelines
+  - task: create-brkt-stemcell
+    file: pcf-pipelines/brkt/tasks/create-brkt-stemcell/task.yml
+    params:
+      AWS_ACCESS_KEY_ID: {{aws_access_key_id}}
+      AWS_SECRET_ACCESS_KEY: {{aws_secret_access_key}}
+      AWS_REGION: {{aws_brkt_region}}
+      SERVICE_DOMAIN: {{service_domain}}
+      URL: {{url}}
+      EMAIL: {{email}}
+      PASSWORD: {{password}}
+      METAVISOR_VERSION: {{metavisor_version}}
+      CA_CERT: {{ca_cert}}
+      BRKT_TOKEN: {{brkt_token}}
+
+  - put: brkt-stemcell
+    params:
+      file: brkt-stemcell/*.tgz
